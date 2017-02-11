@@ -1,9 +1,13 @@
 law(theater,language(coffeescript))
 
+
+
 make_report = (report, message) ->
   if message.DEBUG is true
     report += ": #{JSON.stringify(message)}"
   return report
+
+
 
 #MONITOR
 UPON "adopted", ->
@@ -35,9 +39,13 @@ UPON "adopted", ->
 	
 	return true
 
+
+
+#REQUEST
 UPON "arrived", ->
 	if CS("monitor")?	#DEBUG
     DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
+
 	if @message.type is "Request" and CS("Type") is "globe"
 		if CS("NumTickets") > 0
 			DO "forward", receiver: @sender, message: make_report("Price of ticket: #{CS("PricePerTicket")}", @message)
@@ -45,14 +53,43 @@ UPON "arrived", ->
 		else
 			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
 			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
+
 	if @message.type is "Request" and CS("Type") is "agent"
 		if CS("Ticket") is false
 			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
 			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
 		else
-      DO "deliver", message: "You received a request from #{@sender}. Please repond in the format 'AgentID {\"Price\": price_of_ticket}'."
+      DO "deliver", message: make_report("You received a request from #{@sender}. Please repond in the format 'AgentID {\"type\": Offer, \"Price\": price_of_ticket}'.", @message)
+
 	DO "deliver"
 	return true
+
+
+
+#OFFER
+UPON "sent", ->
+	if CS("monitor")?
+    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} sent a message to #{@receiver}", @message)
+  
+  if @message.type is "Offer" and CS("Type") is "globe"
+  	DO "deliver", message: make_report("Offer is sent automatically by Globe, thus, you are not allowed to make this offer", @message)
+  	return true
+
+  if @message.type is "Offer" and CS("Type") is "agent" 
+ 		if not CS("OfferTo#{@receiver}")?
+  		if CS("Ticket") is "0"
+  			DO "deliver", message: make_report("You do not have any tickets left, thus, you are not allowed to make this offer", @message)
+  			return true
+  		else
+  			DO "set", key: "OfferTo#{@receiver}", value: true
+  	else
+  		DO "deliver", message: make_report("You have already made an offer to this requester, thus, you are not allowed to make this offer", @message)
+  		return true
+
+  DO "forward"
+	return true
+
+	
 
 UPON "disconnected", ->
   if CS("monitor")?
@@ -60,18 +97,11 @@ UPON "disconnected", ->
   DO "quit"
   return true
 
-UPON "sent", ->
-  if CS("monitor")?
-    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} sent a message to #{@receiver}", @message)
-  DO "forward"
-  return true
 
-
-
-#Globe has Type, NumTickets, Account, PricePerTicket
-#Agent has Type, Account, Ticket
-#Message has type {Request, Offer, Payment, Ticket}
-
-#Assuming everyone can only request one ticket
-#For debug 		DO "forward", receiver: CS("monitor"), message: "here"
+# Notes 
+# Globe has Type, NumTickets, Account, PricePerTicket
+# Agent has Type, Account, Ticket
+# Message has type {Request, Offer, Payment, Ticket}
+# Assuming everyone can only request one ticket
+# For debug - DO "forward", receiver: CS("monitor"), message: "here"
 	
