@@ -61,6 +61,14 @@ UPON "arrived", ->
 		else
       DO "deliver", message: make_report("You received a request from #{@sender}. Please repond in the format 'AgentID {\"type\": Offer, \"Price\": price_of_ticket}'.", @message)
 
+  if @message.type is "Offer" and CS("Type") is "globe"
+  	return true
+
+  if @message.type is "Offer" and CS("Type") is "agent"
+  	DO "set", key: "OfferFrom:#{@sender}", value: true
+  	DO "deliver"
+		return true
+
 	DO "deliver"
 	return true
 
@@ -68,7 +76,7 @@ UPON "arrived", ->
 
 #OFFER
 UPON "sent", ->
-	if CS("monitor")?
+	if CS("monitor")? #DEBUG
     DO "forward", receiver: CS("monitor"), message: make_report("#{@self} sent a message to #{@receiver}", @message)
   
   if @message.type is "Offer" and CS("Type") is "globe"
@@ -76,20 +84,38 @@ UPON "sent", ->
   	return true
 
   if @message.type is "Offer" and CS("Type") is "agent" 
- 		if not CS("OfferTo#{@receiver}")?
+ 		if not CS("OfferTo:#{@receiver}")?
   		if CS("Ticket") is "0"
   			DO "deliver", message: make_report("You do not have any tickets left, thus, you are not allowed to make this offer", @message)
   			return true
   		else
-  			DO "set", key: "OfferTo#{@receiver}", value: true
+  			DO "set", key: "OfferTo:#{@receiver}", value: true
+  			DO "forward"
+				return true
   	else
   		DO "deliver", message: make_report("You have already made an offer to this requester, thus, you are not allowed to make this offer", @message)
   		return true
 
-  DO "forward"
-	return true
+  
 
-	
+
+
+UPON "arrived", ->
+	if CS("monitor")?	#DEBUG
+    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
+
+  if @message.type is "Offer" and CS("Type") is "globe"
+  	return true
+
+  if @message.type is "Offer" and CS("Type") is "agent"
+  	DO "set", key: "OfferFrom:#{@sender}", value: true
+  	DO "deliver"
+		return true	
+
+
+
+#PAYMENT
+
 
 UPON "disconnected", ->
   if CS("monitor")?
