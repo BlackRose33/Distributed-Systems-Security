@@ -1,0 +1,43 @@
+law(theater,language(coffeescript))
+
+make_report = (report, message) ->
+  if message.DEBUG is true
+    report += ": #{JSON.stringify(message)}"
+  return report
+
+#For monitoring/debugging
+UPON "adopted", ->
+  if @arguments.monitor?
+    DO "set", key: "monitor", value: @arguments.monitoring 
+    if @arguments.Type? #if @arguments.Type? MON
+   		if @arguments.Type is "globe" and @arguments.Account? and @arguments.NumTickets? and @arguments.PricePerTicket?
+	    	DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with arguments #{@arguments.Account} #{@arguments.NumTickets} #{@arguments.PricePerTicket}"
+	    	return true
+		if @arguments.Type is "agent" and @arguments.Account? and @arguments.Ticket?
+			DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with arguments #{@arguments.Account} #{@arguments.Ticket}"
+			return true
+		DO "forward", receiver: @arguments.monitor, message: "Please ensure that globe and agents are initialized correctly" #MON
+  return true
+
+UPON "disconnected", ->
+  if CS("monitor")?
+    DO "forward", receiver: CS("monitor"), message: "#{@self} is dissolved"
+  DO "quit"
+  return true
+
+UPON "sent", ->
+  if CS("monitor")?
+    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} sent a message to #{@receiver}", @message)
+  DO "forward"
+  return true
+
+UPON "arrived", ->
+  if CS("monitor")?
+    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
+  DO "deliver"
+  return true
+
+#Actual code
+#Globe has Type, NumTickets, Account, PricePerTicket
+#Agent has Type, Account, Ticket
+
