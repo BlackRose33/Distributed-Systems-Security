@@ -5,19 +5,54 @@ make_report = (report, message) ->
     report += ": #{JSON.stringify(message)}"
   return report
 
-#For monitoring/debugging
+#MONITOR
 UPON "adopted", ->
-  if @arguments.monitor?
-    DO "set", key: "monitor", value: @arguments.monitoring 
-    if @arguments.Type? #if @arguments.Type? MON
-   		if @arguments.Type is "globe" and @arguments.Account? and @arguments.NumTickets? and @arguments.PricePerTicket?
-	    	DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with arguments #{@arguments.Account} #{@arguments.NumTickets} #{@arguments.PricePerTicket}"
-	    	return true
-		if @arguments.Type is "agent" and @arguments.Account? and @arguments.Ticket?
-			DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with arguments #{@arguments.Account} #{@arguments.Ticket}"
-			return true
-		DO "forward", receiver: @arguments.monitor, message: "Please ensure that globe and agents are initialized correctly" #MON
-  return true
+	if @arguments.monitor?
+    DO "set", key: "monitor", value: @arguments.monitor
+  if @arguments.monitor is true
+  	return true
+
+  if @arguments.Type?
+  	
+  	if @arguments.Type is "globe" 
+  		if @arguments.Account? and @arguments.NumTickets? and @arguments.PricePerTicket?
+  			DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with account amount $#{@arguments.Account}, Number of tickets #{@arguments.NumTickets} and price per ticket $#{@arguments.PricePerTicket}"
+  			DO "set", key: "Type", value: @arguments.Type
+  			DO "set", key: "Account", value: @arguments.Account
+  			DO "set", key: "NumTickets", value: @arguments.NumTickets
+  			DO "set", key: "PricePerTicket", value: @arguments.PricePerTicket
+  		else
+  			DO "forward", message: "check initialization arguments"
+		
+		if @arguments.Type is "agent" 
+			if @arguments.Account? and @arguments.Ticket?
+				DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with account amount $#{@arguments.Account} and ticket is #{@arguments.Ticket}"
+				DO "set", key: "Type", value: @arguments.Type
+				DO "set", key: "Account", value: @arguments.Account
+				DO "set", key: "Ticket", value: @arguments.Ticket
+			else
+				DO "forward", message: "check initialization arguments"
+	
+	return true
+
+UPON "arrived", ->
+	if CS("monitor")?	#DEBUG
+    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
+	if @message.type is "Request" and CS("Type") is "globe"
+		if CS("NumTickets") > 0
+			DO "forward", receiver: @sender, message: make_report("Price of ticket: #{CS("PricePerTicket")}", @message)
+			DO "deliver", message: "You received a request from #{@sender}. Price of ticket was sent to the requester."
+		else
+			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
+			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
+	if @message.type is "Request" and CS("Type") is "agent"
+		if CS("Ticket") is false
+			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
+			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
+		else
+      DO "deliver", message: "You received a request from #{@sender}. Please repond in the format 'AgentID {\"Price\": price_of_ticket}'."
+	DO "deliver"
+	return true
 
 UPON "disconnected", ->
   if CS("monitor")?
@@ -31,13 +66,12 @@ UPON "sent", ->
   DO "forward"
   return true
 
-UPON "arrived", ->
-  if CS("monitor")?
-    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
-  DO "deliver"
-  return true
 
-#Actual code
+
 #Globe has Type, NumTickets, Account, PricePerTicket
 #Agent has Type, Account, Ticket
+#Message has type {Request, Offer, Payment, Ticket}
 
+#Assuming everyone can only request one ticket
+#For debug 		DO "forward", receiver: CS("monitor"), message: "here"
+	
