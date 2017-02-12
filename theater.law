@@ -1,7 +1,5 @@
 law(theater,language(coffeescript))
 
-
-
 make_report = (report, message) ->
   if message.DEBUG is true
     report += ": #{JSON.stringify(message)}"
@@ -41,7 +39,7 @@ UPON "adopted", ->
 
 
 
-#REQUEST
+#REQUEST, OFFER globe
 UPON "arrived", ->
 	if CS("monitor")?	#DEBUG
     DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
@@ -53,36 +51,49 @@ UPON "arrived", ->
 		else
 			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
 			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
+		return true
 
+	if @message.type is "Offer" and CS("Type") is "globe"
+  	return true
+
+#REQUEST, OFFER agent
+UPON "arrived", ->
 	if @message.type is "Request" and CS("Type") is "agent"
 		if CS("Ticket") is false
 			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
 			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
 		else
       DO "deliver", message: make_report("You received a request from #{@sender}. Please repond in the format 'AgentID {\"type\": Offer, \"Price\": price_of_ticket}'.", @message)
-
-  if @message.type is "Offer" and CS("Type") is "globe"
   	return true
-
-  if @message.type is "Offer" and CS("Type") is "agent"
+	
+	if @message.type is "Offer" and CS("Type") is "agent"
   	DO "set", key: "OfferFrom:#{@sender}", value: true
-  	DO "deliver"
-		return true
+		DO "deliver"
+		return true	
 
-	DO "deliver"
+#Automatic responses
+UPON "arrived", ->
+	if not @message.type?
+  	DO "deliver"
 	return true
 
 
 
-#OFFER
+#OFFER globe
 UPON "sent", ->
 	if CS("monitor")? #DEBUG
     DO "forward", receiver: CS("monitor"), message: make_report("#{@self} sent a message to #{@receiver}", @message)
   
+  if @message.type is "Request" and CS("Type") is "globe"
+  	DO "deliver", message: make_report("Globe is not allowed to make a request", @message)
+  	return true
+  	
   if @message.type is "Offer" and CS("Type") is "globe"
   	DO "deliver", message: make_report("Offer is sent automatically by Globe, thus, you are not allowed to make this offer", @message)
   	return true
 
+#OFFER agent
+UPON "sent", ->
   if @message.type is "Offer" and CS("Type") is "agent" 
  		if not CS("OfferTo:#{@receiver}")?
   		if CS("Ticket") is "0"
@@ -90,31 +101,17 @@ UPON "sent", ->
   			return true
   		else
   			DO "set", key: "OfferTo:#{@receiver}", value: true
-  			DO "forward"
-				return true
   	else
   		DO "deliver", message: make_report("You have already made an offer to this requester, thus, you are not allowed to make this offer", @message)
   		return true
 
-  
-
-
-
-UPON "arrived", ->
-	if CS("monitor")?	#DEBUG
-    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
-
-  if @message.type is "Offer" and CS("Type") is "globe"
-  	return true
-
-  if @message.type is "Offer" and CS("Type") is "agent"
-  	DO "set", key: "OfferFrom:#{@sender}", value: true
-  	DO "deliver"
-		return true	
+  DO "forward"
+	return true
 
 
 
 #PAYMENT
+
 
 
 UPON "disconnected", ->
@@ -122,6 +119,7 @@ UPON "disconnected", ->
     DO "forward", receiver: CS("monitor"), message: "#{@self} is dissolved"
   DO "quit"
   return true
+
 
 
 # Notes 
