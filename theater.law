@@ -1,11 +1,7 @@
 law(theater,language(coffeescript))
 
-make_report = (report, message) ->
-  if message.DEBUG is true
-    report += ": #{JSON.stringify(message)}"
-  return report
-
-
+TicketID = 0
+ID = TicketID++
 
 #MONITOR
 UPON "adopted", ->
@@ -15,117 +11,85 @@ UPON "adopted", ->
   	return true
 
   if @arguments.Type?
-  	
-  	if @arguments.Type is "globe" 
-  		if @arguments.Account? and @arguments.NumTickets? and @arguments.PricePerTicket?
-  			DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with account amount $#{@arguments.Account}, Number of tickets #{@arguments.NumTickets} and price per ticket $#{@arguments.PricePerTicket}"
-  			DO "set", key: "Type", value: @arguments.Type
-  			DO "set", key: "Account", value: @arguments.Account
-  			DO "set", key: "NumTickets", value: @arguments.NumTickets
-  			DO "set", key: "PricePerTicket", value: @arguments.PricePerTicket
-  		else
-  			DO "forward", message: "check initialization arguments"
-		
-		if @arguments.Type is "agent" 
-			if @arguments.Account? and @arguments.Ticket?
-				DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed with account amount $#{@arguments.Account} and ticket is #{@arguments.Ticket}"
-				DO "set", key: "Type", value: @arguments.Type
-				DO "set", key: "Account", value: @arguments.Account
-				DO "set", key: "Ticket", value: @arguments.Ticket
-			else
-				DO "forward", message: "check initialization arguments"
-	
+
+  	if @arguments.Type is "globe"
+  		DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed"
+			DO "set", key: "Type", value: @arguments.Type
+
+		if @arguments.Type is "agent"
+			DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed"
+			DO "set", key: "Type", value: @arguments.Type
+			DO "set", key: "Ticket", value: 0
+
 	return true
-
-
 
 #REQUEST, OFFER globe
 UPON "arrived", ->
-	if CS("monitor")?	#DEBUG
-    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} receives a message from #{@sender}", @message)
+  if CS("monitor")?	#DEBUG
+    DO "forward", receiver: CS("monitor"), message: "#{@self} receives a message from #{@sender}"
 
-	if @message.type is "Request" and CS("Type") is "globe"
-		if CS("NumTickets") > 0
-			DO "forward", receiver: @sender, message: make_report("Price of ticket: #{CS("PricePerTicket")}", @message)
-			DO "deliver", message: "You received a request from #{@sender}. Price of ticket was sent to the requester."
-		else
-			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
-			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
-		return true
-
-	if @message.type is "Offer" and CS("Type") is "globe"
-  	return true
+ 		if CS("Type") is "globe"
+    	if @message.type is "Request"
+        ID = TicketID++
+        #DO "set", key: "Ticket#{ID}", value: true
+        DO "forward", receiver: @sender, message: {type: "Ticket", Ticket: ID}
+  		  DO "deliver", message: "You received a request from #{@sender}. Ticket was provided."
+      if @message.type is "Ticket"
+        # TODO Need to check ticket and open door
+        DO "deliver"
+    		return true
 
 #REQUEST, OFFER agent
 UPON "arrived", ->
-	if @message.type is "Request" and CS("Type") is "agent"
-		if CS("Ticket") is false
-			DO "forward", receiver: @sender, message: make_report("No tickets left", @message)
-			DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
-		else
-      DO "deliver", message: make_report("You received a request from #{@sender}. Please repond in the format 'AgentID {\"type\": Offer, \"Price\": price_of_ticket}'.", @message)
-  	return true
-	
-	if @message.type is "Offer" and CS("Type") is "agent"
-  	DO "set", key: "OfferFrom:#{@sender}", value: true
-		DO "deliver"
-		return true	
+  if CS("Type") is "agent"
+ 	 if @message.type is "Request"
+ 	  if CS("Ticket") is 0
+      DO "forward", receiver: @sender, message: "No tickets left. Please ask someone else."
+      DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
+    else
+      DO "deliver", message: "You received a request from #{@sender}. Please respond in the format 'AgentID {\"type\": Offer, \"Price\": price_of_ticket}'."
+    return true
 
 #Automatic responses
 UPON "arrived", ->
-	if not @message.type?
-  	DO "deliver"
-	return true
-
-
+  DO "deliver"
+  return true
 
 #OFFER globe
 UPON "sent", ->
 	if CS("monitor")? #DEBUG
-    DO "forward", receiver: CS("monitor"), message: make_report("#{@self} sent a message to #{@receiver}", @message)
-  
-  if @message.type is "Request" and CS("Type") is "globe"
-  	DO "deliver", message: make_report("Globe is not allowed to make a request", @message)
-  	return true
-  	
-  if @message.type is "Offer" and CS("Type") is "globe"
-  	DO "deliver", message: make_report("Offer is sent automatically by Globe, thus, you are not allowed to make this offer", @message)
+    DO "forward", receiver: CS("monitor"), message: "#{@self} sent a message to #{@receiver}"
+
+	if @message.type is "Request" and CS("Type") is "globe"
+  	DO "deliver", message: "Globe is not allowed to make a request"
   	return true
 
 #OFFER agent
 UPON "sent", ->
-  if @message.type is "Offer" and CS("Type") is "agent" 
- 		if not CS("OfferTo:#{@receiver}")?
-  		if CS("Ticket") is "0"
-  			DO "deliver", message: make_report("You do not have any tickets left, thus, you are not allowed to make this offer", @message)
-  			return true
-  		else
-  			DO "set", key: "OfferTo:#{@receiver}", value: true
-  	else
-  		DO "deliver", message: make_report("You have already made an offer to this requester, thus, you are not allowed to make this offer", @message)
-  		return true
+	if CS("Type") is "agent"
+		if @message.type is "Request"
+			if CS("Ticket") is not 0
+      	DO "deliver", message: "You already have a ticket. No request sent."
+      else
+        DO "forward"
+      return true
+		if @message.type is "Ticket"
+			if CS("Ticket") is 0
+  			DO "deliver", message: "You do not have any tickets left to provide."
+	  	else
+        # TODO remove ticket from this agent
+  			DO "deliver", message: "Here is ticket"
+ 			return true
+    return true
 
-  DO "forward"
+#Any other message
+UPON "sent", ->
+	DO "forward"
 	return true
 
-
-
-#PAYMENT
-
-
-
+#DISCONNECT
 UPON "disconnected", ->
   if CS("monitor")?
     DO "forward", receiver: CS("monitor"), message: "#{@self} is dissolved"
   DO "quit"
   return true
-
-
-
-# Notes 
-# Globe has Type, NumTickets, Account, PricePerTicket
-# Agent has Type, Account, Ticket
-# Message has type {Request, Offer, Payment, Ticket}
-# Assuming everyone can only request one ticket
-# For debug - DO "forward", receiver: CS("monitor"), message: "here"
-	
