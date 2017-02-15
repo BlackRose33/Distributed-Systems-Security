@@ -82,16 +82,17 @@ UPON "sent", ->
         DO "forward", message: "Door is open"
       else
         DO "deliver", message: "Invalid ticket was provided"
-
+      return true
+      
     if @message.type is "Ticket"
       if CS("RequestFrom#{@receiver}")?
 	      ID++
   	    DO "unset", key: "RequestFrom#{@receiver}", value: false
     	  DO "set", key: "Ticket#{ID}", value: true
-      	DO "forward", receiver: @sender, message: {type: "Ticket", ticket: ID}
+      	DO "forward", message: {type: "Ticket", ticket: ID}
 			else
-  	    DO "deliver", message: "Ticket cannot be provided"
-    	return true
+				DO "deliver", message: "Ticket cannot be provided"
+			return true
 
 #REQUEST agent
 UPON "sent", ->
@@ -102,13 +103,16 @@ UPON "sent", ->
       else
         DO "set", key: "RequestTo#{@receiver}", value: true
       return true
+
     if @message.type is "Ticket"
       if CS("RequestFrom#{@receiver}")? or @receiver.type is "globe"
         DO "unset", key: "Ticket", value: 0
         DO "forward", message: {type: "Ticket", ticket: CS("Ticket")}
+        DO "forward", message: "Ticket provided"
       else
         DO "deliver", message: "Cannot send ticket"
 			return true
+
 #Any other message
 UPON "sent", ->
 	DO "forward"
