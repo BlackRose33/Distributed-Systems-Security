@@ -23,64 +23,75 @@ UPON "adopted", ->
 
 	return true
 
-#REQUEST, OFFER globe
+#Arrived
+#REQUEST, TICKET globe
 UPON "arrived", ->
   if CS("monitor")?	#DEBUG
     DO "forward", receiver: CS("monitor"), message: "#{@self} receives a message from #{@sender}"
 
  		if CS("Type") is "globe"
     	if @message.type is "Request"
-        ID = TicketID++
-        #DO "set", key: "Ticket#{ID}", value: true
-        DO "forward", receiver: @sender, message: {type: "Ticket", Ticket: ID}
-  		  DO "deliver", message: "You received a request from #{@sender}. Ticket was provided."
+        if not CS("RequestFrom#{@sender}")?
+          DO "set", key: CS("RequestFrom#{@sender}"), value: true
+        else
+          DO "forward", receiver: @sender, message: "Still processing previous request"
+        return true
       if @message.type is "Ticket"
-        # TODO Need to check ticket and open door
-        DO "deliver"
-    		return true
+        if CS("Ticket#{@message.ticket}")?
+          DO "unset", key: CS("Ticket#{@message.ticket}"), value: false
+          DO "set", key: CS("OpenDoorFor#{@sender}"), value: true
+        else
+          DO "forward", receiver: @sender, message: "Invalid Ticket."
+      	return true
 
-#REQUEST, OFFER agent
+#REQUEST, TICKET agent
 UPON "arrived", ->
   if CS("Type") is "agent"
- 	 if @message.type is "Request"
- 	  if CS("Ticket") is 0
-      DO "forward", receiver: @sender, message: "No tickets left. Please ask someone else."
-      DO "deliver", message: "You received a request from #{@sender}, however, you have no tickets left."
-    else
-      DO "deliver", message: "You received a request from #{@sender}. Please respond in the format 'AgentID {\"type\": Offer, \"Price\": price_of_ticket}'."
-    return true
+ 		if @message.type is "Request"
+    	if CS("Ticket") is 0
+        DO "forward", receiver: @sender, message: "Sorry! I do not have a ticket."
+	    else
+        DO "set", key: "RequestFrom#{@sender}", value: true
+     	return true
+  	if @message.type is "Ticket"
+      DO "set", key: "Ticket", value: @message.ticket
+      return true
 
 #Automatic responses
 UPON "arrived", ->
   DO "deliver"
   return true
 
-#OFFER globe
+#Sent
+#REQUEST globe
 UPON "sent", ->
 	if CS("monitor")? #DEBUG
     DO "forward", receiver: CS("monitor"), message: "#{@self} sent a message to #{@receiver}"
 
-	if @message.type is "Request" and CS("Type") is "globe"
-  	DO "deliver", message: "Globe is not allowed to make a request"
-  	return true
+	if CS("Type") is "globe"
+		if @message.type is "Request"
+  		DO "deliver", message: "Globe is not allowed to make a request"
+    if @message.type is "Ticket"
+      if CS("RequestFrom#{@receiver}")?
+        ID++
+        DO "unset", key: "RequestFrom#{@receiver}", value: false
+        DO "set", key: "Ticket#{ID}", value: true
+        DO "forward", receiver: @sender, message: {type: "Ticket", ticket: ID}
+		if @message.type is "Open"
+      if CS("OpenDoorFor#{@receiver}")?
+        DO "forward", message: "Door is open"
+    return true
 
-#OFFER agent
+#REQUEST agent
 UPON "sent", ->
 	if CS("Type") is "agent"
 		if @message.type is "Request"
-			if CS("Ticket") is not 0
-      	DO "deliver", message: "You already have a ticket. No request sent."
-      else
-        DO "forward"
-      return true
-		if @message.type is "Ticket"
-			if CS("Ticket") is 0
-  			DO "deliver", message: "You do not have any tickets left to provide."
-	  	else
-        # TODO remove ticket from this agent
-  			DO "deliver", message: "Here is ticket"
- 			return true
-    return true
+      if CS("Ticket") is not 0
+        DO "deliver", message: "You already have a ticket. You cannot request another."
+    if @message.type is "Ticket"
+      if CS("RequestFrom#{@receiver}")? or @receiver is "globe"
+        DO "unset", key: "Ticket", value: 0
+        DO "forward", message: {type: "Ticket", ticket: CS("Ticket")}
 
 #Any other message
 UPON "sent", ->
