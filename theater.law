@@ -101,11 +101,14 @@ UPON "sent", ->
         DO "deliver", message: "You already have a ticket. You cannot request another."
       else
         DO "set", key: "RequestTo#{@receiver}", value: true
+      return true
     if @message.type is "Ticket"
       if CS("RequestFrom#{@receiver}")? or @receiver.type is "globe"
         DO "unset", key: "Ticket", value: 0
         DO "forward", message: {type: "Ticket", ticket: CS("Ticket")}
-
+      else
+        DO "deliver", message: "Cannot send ticket"
+			return true
 #Any other message
 UPON "sent", ->
 	DO "forward"
