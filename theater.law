@@ -14,11 +14,11 @@ UPON "adopted", ->
 
   	if @arguments.Type is "globe"
   		DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed"
-			DO "set", key: "Type", value: @arguments.Type
+			DO "set", key: "Type", value: "globe"
 
 		if @arguments.Type is "agent"
 			DO "forward", receiver: @arguments.monitor, message: "#{@self} is formed"
-			DO "set", key: "Type", value: @arguments.Type
+			DO "set", key: "Type", value: "agent"
 			DO "set", key: "Ticket", value: 0
 
 	return true
@@ -34,6 +34,7 @@ UPON "arrived", ->
     	if @message.type is "Request"
         if not CS("RequestFrom#{@sender}")?
           DO "set", key: CS("RequestFrom#{@sender}"), value: true
+          DO "deliver"
         else
           DO "forward", receiver: @sender, message: "Still processing previous request"
         return true
@@ -42,6 +43,7 @@ UPON "arrived", ->
         if CS("Ticket#{@message.ticket}")?
           DO "unset", key: CS("Ticket#{@message.ticket}"), value: false
           DO "set", key: CS("OpenDoorFor#{@sender}"), value: true
+          DO "deliver"
         else
           DO "forward", receiver: @sender, message: "Invalid Ticket."
       	return true
@@ -54,12 +56,14 @@ UPON "arrived", ->
         DO "forward", receiver: @sender, message: "Sorry! I do not have a ticket."
 	    else
         DO "set", key: "RequestFrom#{@sender}", value: true
+        DO "deliver"
      	return true
 
   	if @message.type is "Ticket"
       if CS("RequestTo#{@sender}")?
         DO "unset", key: "RequestTo#{@sender}", value: false
 	      DO "set", key: "Ticket", value: @message.ticket
+	      DO "deliver"
       return true
 
 #Automatic responses
@@ -76,6 +80,7 @@ UPON "sent", ->
 	if CS("Type") is "globe"
 		if @message.type is "Request"
   		DO "deliver", message: "Globe is not allowed to make a request"
+  		return true
 
 		if @message.type is "Open"
       if CS("OpenDoorFor#{@receiver}")?
@@ -83,7 +88,7 @@ UPON "sent", ->
       else
         DO "deliver", message: "Invalid ticket was provided"
       return true
-      
+
     if @message.type is "Ticket"
       if CS("RequestFrom#{@receiver}")?
 	      ID++
@@ -102,6 +107,7 @@ UPON "sent", ->
         DO "deliver", message: "You already have a ticket. You cannot request another."
       else
         DO "set", key: "RequestTo#{@receiver}", value: true
+        DO "forward"
       return true
 
     if @message.type is "Ticket"
