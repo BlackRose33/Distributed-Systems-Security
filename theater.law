@@ -1,7 +1,6 @@
 law(theater,language(coffeescript))
 
-TicketID = 0
-ID = TicketID++
+ID = 1
 
 #MONITOR
 UPON "adopted", ->
@@ -33,7 +32,7 @@ UPON "arrived", ->
 
     	if @message.type is "Request"
         if not CS("RequestFrom#{@sender}")?
-          DO "set", key: CS("RequestFrom#{@sender}"), value: true
+          DO "set", key: "RequestFrom#{@sender}", value: true
           DO "deliver"
         else
           DO "forward", receiver: @sender, message: "Still processing previous request"
@@ -41,8 +40,8 @@ UPON "arrived", ->
 
       if @message.type is "Ticket"
         if CS("Ticket#{@message.ticket}")?
-          DO "unset", key: CS("Ticket#{@message.ticket}"), value: false
-          DO "set", key: CS("OpenDoorFor#{@sender}"), value: true
+          DO "unset", key: "Ticket#{@message.ticket}", value: false
+          DO "set", key: "OpenDoorFor#{@sender}", value: true
           DO "deliver"
         else
           DO "forward", receiver: @sender, message: "Invalid Ticket."
@@ -58,7 +57,6 @@ UPON "arrived", ->
         DO "set", key: "RequestFrom#{@sender}", value: true
         DO "deliver"
      	return true
-
   	if @message.type is "Ticket"
       if CS("RequestTo#{@sender}")?
         DO "unset", key: "RequestTo#{@sender}", value: false
@@ -94,7 +92,7 @@ UPON "sent", ->
 	      ID++
   	    DO "unset", key: "RequestFrom#{@receiver}", value: false
     	  DO "set", key: "Ticket#{ID}", value: true
-      	DO "forward", message: {type: "Ticket", ticket: ID}
+      	DO "forward", receiver: @receiver, sender: @sender, message: {type: "Ticket", ticket: ID}
 			else
 				DO "deliver", message: "Ticket cannot be provided"
 			return true
@@ -111,12 +109,23 @@ UPON "sent", ->
       return true
 
     if @message.type is "Ticket"
-      if CS("RequestFrom#{@receiver}")? or @receiver.type is "globe"
-        DO "unset", key: "Ticket", value: 0
-        DO "forward", message: {type: "Ticket", ticket: CS("Ticket")}
-        DO "forward", message: "Ticket provided"
-      else
-        DO "deliver", message: "Cannot send ticket"
+      DO "forward", receiver: CS("monitor"), message: "here1" #DEBUG
+      if CS("RequestFrom#{@receiver}")?
+        DO "forward", receiver: CS("monitor"), message: "here4" #DEBUG
+        if CS("Ticket") is not 0
+          DO "set", key: "Ticket", value: 0
+          DO "unset", key: "RequestFrom#{@receiver}", value: false
+          DO "forward", receiver: @receiver, sender: @sender, message: {type: "Ticket", ticket: CS("Ticket")}
+        else
+          DO "deliver", message: "Cannot send ticket"
+      else  # TODO @receiver.Type is globe
+        DO "forward", receiver: CS("monitor"), message: CS("Ticket") #DEBUG
+        if CS("Ticket") is not 0 # TODO why doe is not 0 not work
+          DO "forward", receiver: CS("monitor"), message: "here6" #DEBUG
+          DO "set", key: "Ticket", value: 0
+          DO "forward", receiver: @receiver, sender: @sender, message: {type: "Ticket", ticket: CS("Ticket")}
+        else
+          DO "deliver", message: "Cannot send ticket"
 			return true
 
 #Any other message
